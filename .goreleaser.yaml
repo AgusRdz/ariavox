@@ -52,12 +52,6 @@ signs:
 
 sboms:
   - artifacts: binary
-    args:
-      - "$artifact"
-      - --file
-      - "$sbom"
-      - --output
-      - spdx-json
 
 snapshot:
   version_template: "{{ .Tag }}-dev"
