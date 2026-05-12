@@ -55,35 +55,47 @@ if [ -z "$ARIAVOX_VERSION" ]; then
 fi
 
 URL="https://github.com/${REPO}/releases/download/${ARIAVOX_VERSION}/${BINARY}"
-
-echo "installing ariavox ${ARIAVOX_VERSION} (${OS}/${ARCH})..."
-
 CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${ARIAVOX_VERSION}/checksums.txt"
 BUNDLE_URL="https://github.com/${REPO}/releases/download/${ARIAVOX_VERSION}/checksums.txt.bundle"
 
-mkdir -p "$INSTALL_DIR"
+echo "installing ariavox ${ARIAVOX_VERSION} (${OS}/${ARCH})..."
 
-# Download binary
-curl -fsSL "$URL" -o "${INSTALL_DIR}/ariavox${EXT}"
-chmod +x "${INSTALL_DIR}/ariavox${EXT}"
-
-# Verify checksum
+# --- Download to temp dir first ---
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+
+TMP_BINARY="${TMP_DIR}/${BINARY}"
+curl -fsSL "$URL" -o "$TMP_BINARY"
+
+# --- Checksum verification ---
 curl -fsSL "$CHECKSUMS_URL" -o "${TMP_DIR}/checksums.txt"
 
-# sha256sum / shasum
-if command -v sha256sum >/dev/null 2>&1; then
-  (cd "$INSTALL_DIR" && grep "${BINARY}" "${TMP_DIR}/checksums.txt" | sha256sum --check --status) \
-    && echo "checksum verified" \
-    || { echo "checksum mismatch — aborting" >&2; rm -f "${INSTALL_DIR}/ariavox${EXT}"; exit 1; }
-elif command -v shasum >/dev/null 2>&1; then
-  (cd "$INSTALL_DIR" && grep "${BINARY}" "${TMP_DIR}/checksums.txt" | sed 's/ \*/ /' | shasum -a 256 --check --status) \
-    && echo "checksum verified" \
-    || { echo "checksum mismatch — aborting" >&2; rm -f "${INSTALL_DIR}/ariavox${EXT}"; exit 1; }
+# Extract expected hash for this binary
+EXPECTED=$(grep "  ${BINARY}$\| \*${BINARY}$\| ${BINARY}$" "${TMP_DIR}/checksums.txt" | awk '{print $1}')
+
+if [ -z "$EXPECTED" ]; then
+  echo "warning: ${BINARY} not found in checksums.txt — skipping checksum verification" >&2
+else
+  # Compute actual hash — use shasum on macOS, sha256sum on Linux
+  if command -v shasum >/dev/null 2>&1; then
+    ACTUAL=$(shasum -a 256 "$TMP_BINARY" | awk '{print $1}')
+  elif command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL=$(sha256sum "$TMP_BINARY" | awk '{print $1}')
+  else
+    echo "warning: no sha256 tool found — skipping checksum verification" >&2
+    ACTUAL="$EXPECTED"
+  fi
+
+  if [ "$ACTUAL" != "$EXPECTED" ]; then
+    echo "checksum mismatch — aborting" >&2
+    echo "  expected: $EXPECTED" >&2
+    echo "  actual:   $ACTUAL" >&2
+    exit 1
+  fi
+  echo "checksum verified"
 fi
 
-# Optional: verify cosign signature (skipped if cosign not installed)
+# --- Optional cosign verification ---
 if command -v cosign >/dev/null 2>&1; then
   curl -fsSL "$BUNDLE_URL" -o "${TMP_DIR}/checksums.txt.bundle"
   if cosign verify-blob \
@@ -93,10 +105,14 @@ if command -v cosign >/dev/null 2>&1; then
       "${TMP_DIR}/checksums.txt" 2>/dev/null; then
     echo "cosign signature verified"
   else
-    echo "WARNING: cosign verification failed — the release may not have been signed yet" >&2
+    echo "warning: cosign verification failed" >&2
   fi
 fi
 
+# --- Install ---
+mkdir -p "$INSTALL_DIR"
+cp "$TMP_BINARY" "${INSTALL_DIR}/ariavox${EXT}"
+chmod +x "${INSTALL_DIR}/ariavox${EXT}"
 echo "installed ariavox to ${INSTALL_DIR}/ariavox${EXT}"
 echo ""
 
@@ -129,7 +145,6 @@ case ":$PATH:" in
         echo "  $PATH_LINE"
       fi
 
-      # Make available in the current shell session without restart
       export PATH="${INSTALL_DIR}:$PATH"
       echo "ariavox is available in this shell session immediately"
       echo ""
