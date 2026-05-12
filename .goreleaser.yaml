@@ -35,6 +35,10 @@ archives:
     name_template: "ariavox_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - none*
+  - id: raw
+    formats:
+      - binary
+    name_template: "ariavox-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
