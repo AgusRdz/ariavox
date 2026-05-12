@@ -8,12 +8,14 @@ import (
 	"os/exec"
 
 	"github.com/creack/pty"
+	"golang.org/x/term"
 )
 
 // UnixPTY wraps creack/pty for macOS and Linux.
 type UnixPTY struct {
-	f   *os.File
-	cmd *exec.Cmd
+	f       *os.File
+	cmd     *exec.Cmd
+	oldState *term.State
 }
 
 // NewUnix creates a PTY for unix platforms.
@@ -25,7 +27,6 @@ func (p *UnixPTY) Start(cmd *exec.Cmd) error {
 	if cmd.Env == nil {
 		cmd.Env = os.Environ()
 	}
-	// Ensure TERM is set for correct ANSI support
 	cmd.Env = appendOrReplace(cmd.Env, "TERM=xterm-256color")
 
 	f, err := pty.Start(cmd)
@@ -34,6 +35,13 @@ func (p *UnixPTY) Start(cmd *exec.Cmd) error {
 	}
 	p.f = f
 	p.cmd = cmd
+
+	// Put the host terminal into raw mode so control sequences flow through
+	// transparently to the child PTY instead of being interpreted locally.
+	if old, err := term.MakeRaw(int(os.Stdin.Fd())); err == nil {
+		p.oldState = old
+	}
+
 	return nil
 }
 
@@ -45,6 +53,9 @@ func (p *UnixPTY) Resize(rows, cols uint16) error {
 }
 
 func (p *UnixPTY) Close() error {
+	if p.oldState != nil {
+		_ = term.Restore(int(os.Stdin.Fd()), p.oldState)
+	}
 	if p.f != nil {
 		return p.f.Close()
 	}

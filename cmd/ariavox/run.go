@@ -166,6 +166,7 @@ func runAgent(args []string, cfg config.Config, srMode, ttsMode, verbose bool) e
 	close(sigCh)
 
 	waitErr := p.Wait()
+	p.Close() // restore terminal state before os.Exit (defers don't run on os.Exit)
 	var exitErr *exec.ExitError
 	if errors.As(waitErr, &exitErr) {
 		os.Exit(exitErr.ExitCode())
