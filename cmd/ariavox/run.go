@@ -1,10 +1,20 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
+	"os/signal"
 
 	"github.com/spf13/cobra"
+
+	"github.com/AgusRdz/ariavox/internal/processor"
+	"github.com/AgusRdz/ariavox/internal/pty"
+	"github.com/AgusRdz/ariavox/internal/renderer"
+	"github.com/AgusRdz/ariavox/internal/tts"
+	"github.com/AgusRdz/ariavox/pkg/ansi"
 )
 
 func newRunCmd() *cobra.Command {
@@ -20,10 +30,7 @@ func newRunCmd() *cobra.Command {
   ariavox run --tts -- claude`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Phase 1 stub: will be wired to internal/pty
-			fmt.Fprintf(os.Stderr, "ariavox: run not yet implemented (phase 1)\n")
-			fmt.Fprintf(os.Stderr, "command: %v sr=%v tts=%v verbose=%v\n", args, srMode, ttsMode, verbose)
-			return nil
+			return runAgent(args, srMode, ttsMode, verbose)
 		},
 	}
 
@@ -32,4 +39,85 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable debug logging to stderr")
 
 	return cmd
+}
+
+func runAgent(args []string, srMode, ttsMode, verbose bool) error {
+	p := pty.New()
+
+	child := exec.Command(args[0], args[1:]...)
+
+	if err := p.Start(child); err != nil {
+		return fmt.Errorf("ariavox: %w", err)
+	}
+	defer p.Close()
+
+	if rows, cols, err := termSize(); err == nil {
+		_ = p.Resize(rows, cols)
+	}
+
+	proc := processor.New()
+
+	rCfg := renderer.DefaultConfig()
+	rCfg.SRMode = srMode
+	rend := renderer.New(rCfg, os.Stdout)
+
+	var speaker tts.Speaker
+	if ttsMode {
+		speaker = tts.New()
+		defer speaker.Close()
+	}
+
+	parser := &ansi.Parser{}
+
+	go func() {
+		_, _ = io.Copy(p, os.Stdin)
+	}()
+
+	sigCh := make(chan os.Signal, 8)
+	notifySignals(sigCh)
+	go handleSignals(sigCh, p)
+
+	buf := make([]byte, 4096)
+	for {
+		n, err := p.Read(buf)
+		if n > 0 {
+			chunk := buf[:n]
+
+			_, _ = os.Stdout.Write(chunk)
+
+			if ttsMode || srMode {
+				clean := parser.Process(chunk)
+				events := proc.Process(clean)
+				for _, ev := range events {
+					if srMode {
+						rend.Render(ev)
+					}
+					if ttsMode && speaker != nil && ev.Text != "" {
+						if speakErr := speaker.Speak(ev.Text, ev.Priority); speakErr != nil && verbose {
+							fmt.Fprintf(os.Stderr, "ariavox: tts: %v\n", speakErr)
+						}
+					}
+				}
+			}
+		}
+		if err != nil {
+			if isReadDone(err) {
+				break
+			}
+			if verbose {
+				fmt.Fprintf(os.Stderr, "ariavox: read: %v\n", err)
+			}
+			break
+		}
+	}
+
+	signal.Stop(sigCh)
+	close(sigCh)
+
+	waitErr := p.Wait()
+	var exitErr *exec.ExitError
+	if errors.As(waitErr, &exitErr) {
+		os.Exit(exitErr.ExitCode())
+	}
+	return waitErr
 }

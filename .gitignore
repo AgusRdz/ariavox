@@ -1,6 +1,6 @@
 bin/
-ariavox
-ariavox.exe
+/ariavox
+/ariavox.exe
 coverage.out
 *.test
 dist/
