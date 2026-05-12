@@ -27,7 +27,8 @@ func (m *mockSpeaker) Wait() error  { return nil }
 func (m *mockSpeaker) Stop() error  { m.mu.Lock(); m.stopped++; m.mu.Unlock(); return nil }
 func (m *mockSpeaker) SetRate(_ int) error   { return nil }
 func (m *mockSpeaker) SetVolume(_ int) error { return nil }
-func (m *mockSpeaker) Close() error { return m.Stop() }
+func (m *mockSpeaker) SetVoice(_ string) {}
+func (m *mockSpeaker) Close() error      { return m.Stop() }
 
 func (m *mockSpeaker) getSpoken() []string {
 	m.mu.Lock()
@@ -218,7 +219,8 @@ func (b *blockingSpeaker) Wait() error {
 	<-b.block
 	return nil
 }
-func (b *blockingSpeaker) Stop() error          { return b.mock.Stop() }
-func (b *blockingSpeaker) SetRate(r int) error  { return b.mock.SetRate(r) }
+func (b *blockingSpeaker) Stop() error           { return b.mock.Stop() }
+func (b *blockingSpeaker) SetRate(r int) error   { return b.mock.SetRate(r) }
 func (b *blockingSpeaker) SetVolume(v int) error { return b.mock.SetVolume(v) }
-func (b *blockingSpeaker) Close() error         { return b.mock.Close() }
+func (b *blockingSpeaker) SetVoice(v string)     { b.mock.SetVoice(v) }
+func (b *blockingSpeaker) Close() error          { return b.mock.Close() }

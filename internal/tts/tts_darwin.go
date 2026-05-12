@@ -72,6 +72,12 @@ func (s *DarwinSpeaker) SetVolume(vol int) error {
 	return nil
 }
 
+func (s *DarwinSpeaker) SetVoice(voice string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.voice = voice
+}
+
 func (s *DarwinSpeaker) Wait() error {
 	s.mu.Lock()
 	cmd := s.current

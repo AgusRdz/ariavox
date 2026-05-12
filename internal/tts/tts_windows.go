@@ -17,6 +17,7 @@ type WindowsSpeaker struct {
 	current *exec.Cmd
 	rate    int
 	volume  int
+	voice   string
 }
 
 // New returns a Speaker for Windows.
@@ -73,6 +74,12 @@ func (s *WindowsSpeaker) SetVolume(vol int) error {
 	}
 	s.volume = vol
 	return nil
+}
+
+func (s *WindowsSpeaker) SetVoice(voice string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.voice = voice
 }
 
 func (s *WindowsSpeaker) Wait() error {

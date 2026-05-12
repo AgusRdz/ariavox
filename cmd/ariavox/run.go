@@ -97,6 +97,7 @@ func runAgent(args []string, cfg config.Config, srMode, ttsMode, verbose bool) e
 		spk := tts.New()
 		_ = spk.SetRate(cfg.TTS.Rate)
 		_ = spk.SetVolume(cfg.TTS.Volume)
+		spk.SetVoice(cfg.TTS.Voice)
 		bridge = tts.NewBridge(spk, cfg.TTSKindFilter())
 		defer bridge.Close()
 	}

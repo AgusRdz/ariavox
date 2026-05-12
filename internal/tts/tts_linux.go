@@ -17,6 +17,7 @@ type LinuxSpeaker struct {
 	current *exec.Cmd
 	rate    int
 	volume  int
+	voice   string
 	backend string // detected at first Speak call
 }
 
@@ -79,6 +80,12 @@ func (s *LinuxSpeaker) SetVolume(vol int) error {
 	}
 	s.volume = vol
 	return nil
+}
+
+func (s *LinuxSpeaker) SetVoice(voice string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.voice = voice
 }
 
 func (s *LinuxSpeaker) Wait() error {
