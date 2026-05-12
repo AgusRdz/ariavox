@@ -136,13 +136,14 @@ const defaultConfigYAML = `# ariavox configuration
 
 tts:
   enabled: false
-  rate: 50        # 0-100
+  rate: 25        # 0-100 (25 ≈ 160 wpm, natural pace)
   volume: 80      # 0-100
-  voice: ""       # empty = system default
+  voice: ""       # empty = system default; e.g. "Eddy (Spanish (Mexico))"
   priority_filter:
-    - task_end
-    - error
+    - text
     - tool_use
+    - error
+    - task_end
 
 screen_reader:
   enabled: false        # set true or use --sr flag / ARIAVOX_SR=1
