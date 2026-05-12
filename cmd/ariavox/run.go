@@ -14,6 +14,7 @@ import (
 	"github.com/AgusRdz/ariavox/internal/processor"
 	"github.com/AgusRdz/ariavox/internal/pty"
 	"github.com/AgusRdz/ariavox/internal/renderer"
+	"github.com/AgusRdz/ariavox/internal/srbus"
 	"github.com/AgusRdz/ariavox/internal/tts"
 	"github.com/AgusRdz/ariavox/pkg/ansi"
 )
@@ -100,6 +101,14 @@ func runAgent(args []string, cfg config.Config, srMode, ttsMode, verbose bool) e
 		defer bridge.Close()
 	}
 
+	var bus srbus.Bus
+	if srMode {
+		bus = srbus.New()
+		defer bus.Close()
+	} else {
+		bus = srbus.NopBus{}
+	}
+
 	parser := &ansi.Parser{}
 
 	go func() {
@@ -124,6 +133,11 @@ func runAgent(args []string, cfg config.Config, srMode, ttsMode, verbose bool) e
 				for _, ev := range events {
 					if srMode {
 						rend.Render(ev)
+						if ev.Text != "" {
+							if busErr := bus.Announce(ev.Text); busErr != nil && verbose {
+								fmt.Fprintf(os.Stderr, "ariavox: srbus: %v\n", busErr)
+							}
+						}
 					}
 					if ttsMode && bridge != nil {
 						var logf func(string, ...any)
