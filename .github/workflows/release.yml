@@ -88,11 +88,6 @@ jobs:
       - name: Install syft (SBOM)
         uses: anchore/sbom-action/download-syft@v0
 
-      - name: Install git-cliff
-        uses: taiki-e/install-action@v2
-        with:
-          tool: git-cliff
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

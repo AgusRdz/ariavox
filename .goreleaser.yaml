@@ -63,7 +63,7 @@ snapshot:
   version_template: "{{ .Tag }}-dev"
 
 changelog:
-  use: git-cliff
+  use: github
   abbrev: 7
   sort: asc
   filters:
@@ -71,6 +71,17 @@ changelog:
       - "^chore: update changelog"
       - "^fix: address PR"
       - "^fix: resolve merge conflict"
+  groups:
+    - title: Features
+      regexp: "^feat"
+    - title: Bug Fixes
+      regexp: "^fix"
+    - title: Documentation
+      regexp: "^docs"
+    - title: CI/CD
+      regexp: "^ci"
+    - title: Other
+      regexp: ".*"
 
 release:
   github:
@@ -93,7 +104,6 @@ brews:
       email: github-actions[bot]@users.noreply.github.com
     homepage: https://github.com/AgusRdz/ariavox
     description: Accessible PTY wrapper for AI coding agents
-    # skip_upload: auto skips when HOMEBREW_TAP_TOKEN is not set
     skip_upload: auto
     test: |
       system "#{bin}/ariavox", "version"
