@@ -24,8 +24,8 @@ func writeTmp(t *testing.T, content string) string {
 
 func TestDefault(t *testing.T) {
 	cfg := config.Default()
-	if cfg.TTS.Rate != 50 {
-		t.Errorf("default TTS.Rate = %d, want 50", cfg.TTS.Rate)
+	if cfg.TTS.Rate != 25 {
+		t.Errorf("default TTS.Rate = %d, want 25", cfg.TTS.Rate)
 	}
 	if cfg.TTS.Volume != 80 {
 		t.Errorf("default TTS.Volume = %d, want 80", cfg.TTS.Volume)

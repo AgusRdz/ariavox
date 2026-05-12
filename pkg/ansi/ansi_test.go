@@ -41,3 +41,24 @@ func TestPlainText(t *testing.T) {
 		t.Errorf("got %q want %q", got, "hello world")
 	}
 }
+
+func TestCRBecomesNewline(t *testing.T) {
+	// \r is converted to \n so the processor sees each overwritten subline separately.
+	// Spinner lines get suppressed by the processor; ⏺ lines are kept.
+	input := []byte("\r✶ Pondering…\r⏺Hello!\n")
+	got := string(ansi.Strip(input))
+	want := "\n✶ Pondering…\n⏺Hello!\n"
+	if got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}
+
+func TestCRMidStream(t *testing.T) {
+	// \r mid-stream becomes \n
+	input := []byte("line1\nspinner\rresponse\n")
+	got := string(ansi.Strip(input))
+	want := "line1\nspinner\nresponse\n"
+	if got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}

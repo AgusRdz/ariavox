@@ -140,6 +140,9 @@ func runAgent(args []string, cfg config.Config, srMode, ttsMode, verbose bool) e
 						}
 					}
 					if ttsMode && bridge != nil {
+						if verbose {
+							fmt.Fprintf(os.Stderr, "ariavox: event kind=%d priority=%d text=%q\n", ev.Kind, ev.Priority, ev.Text)
+						}
 						var logf func(string, ...any)
 						if verbose {
 							logf = func(f string, a ...any) {

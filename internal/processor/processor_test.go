@@ -125,7 +125,7 @@ func TestTaskStartOnlyOnce(t *testing.T) {
 
 	// feed multiple chunks; TaskStart should appear only once
 	chunks := []string{
-		"First line\n",
+		"⏺ First line\n",
 		"Second line\n",
 		"Third line\n",
 	}
@@ -148,7 +148,7 @@ func TestTaskStartOnlyOnce(t *testing.T) {
 
 func TestCodeBlockState(t *testing.T) {
 	p := processor.New()
-	input := "```go\nfunc main() {}\n```\n"
+	input := "⏺ Here is the code:\n```go\nfunc main() {}\n```\n"
 	events := p.Process([]byte(input))
 
 	codeCount := 0
@@ -166,7 +166,8 @@ func TestCodeBlockState(t *testing.T) {
 func TestFragmentedInput(t *testing.T) {
 	p := processor.New()
 
-	// line split across two reads
+	// line split across two reads — ⏺ enters response mode first
+	p.Process([]byte("⏺ start\n"))
 	ev1 := p.Process([]byte("hello "))
 	ev2 := p.Process([]byte("world\n"))
 
@@ -196,11 +197,11 @@ func TestEmptyInput(t *testing.T) {
 
 func TestReset(t *testing.T) {
 	p := processor.New()
-	p.Process([]byte("some text\n"))
+	p.Process([]byte("⏺ some text\n"))
 	p.Reset()
 
 	// after reset, TaskStart should fire again
-	events := p.Process([]byte("new session\n"))
+	events := p.Process([]byte("⏺ new session\n"))
 	hasTaskStart := false
 	for _, e := range events {
 		if e.Kind == processor.EventTaskStart {

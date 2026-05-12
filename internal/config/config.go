@@ -54,7 +54,7 @@ func Default() Config {
 	return Config{
 		TTS: TTSConfig{
 			Enabled: false,
-			Rate:    50,
+			Rate:    25,
 			Volume:  80,
 			PriorityFilter: []string{"text", "tool_use", "error", "task_end"},
 		},

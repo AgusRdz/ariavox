@@ -43,10 +43,11 @@ type Event struct {
 // Processor parses a cleaned byte stream and emits semantic Events.
 // It is stateful — a single Processor instance must be used for a continuous stream.
 type Processor struct {
-	inCodeBlock bool   // inside a ``` fence
-	codeLang    string // language tag on the opening fence, if any
-	taskStarted bool   // whether TaskStart has been emitted for the current response
-	lineBuf     []byte // accumulates incomplete lines across Read calls
+	inCodeBlock   bool   // inside a ``` fence
+	codeLang      string // language tag on the opening fence, if any
+	taskStarted   bool   // whether TaskStart has been emitted for the current response
+	inResponse    bool   // true after ⏺ is seen, false after response ends
+	lineBuf       []byte // accumulates incomplete lines across Read calls
 }
 
 // New creates a Processor with default configuration.
@@ -91,7 +92,7 @@ func (p *Processor) Process(b []byte) []Event {
 
 // classifyLine maps a single cleaned line to zero or more Events.
 func (p *Processor) classifyLine(line string) []Event {
-	// clear-screen sentinel (rare but possible after ansi strip)
+	// clear-screen sentinel
 	if line == "\x0c" {
 		return []Event{ev(EventClearScreen, "", PriorityLow)}
 	}
@@ -106,27 +107,40 @@ func (p *Processor) classifyLine(line string) []Event {
 		return []Event{ev(EventCode, line, PriorityLow)}
 	}
 
-	// spinner lines — suppress, high priority to interrupt
+	// spinner lines — also end response mode (spinner after response = Claude finished)
 	if isSpinnerLine(line) {
+		if p.inResponse {
+			p.inResponse = false
+		}
 		return []Event{ev(EventSpinner, line, PriorityHigh)}
 	}
 
-	// opening code fence
-	if isCodeFence(line) {
-		p.inCodeBlock = true
-		p.codeLang = codeFenceLang(line)
-		return []Event{ev(EventCode, line, PriorityLow)}
+	// UI chrome — box drawing, prompt, status bar — also ends response mode
+	if isUIChrome(line) {
+		p.inResponse = false
+		return nil
 	}
 
-	// tool use: lines starting with ● (U+25CF BLACK CIRCLE)
+	// ⏺ marks the start of a Claude response line — enter response mode.
+	if strings.HasPrefix(line, "⏺") {
+		content := strings.TrimSpace(strings.TrimPrefix(line, "⏺"))
+		p.inResponse = true
+		if content == "" {
+			return nil
+		}
+		return p.emitWithTaskStart(ev(EventText, content, PriorityMedium))
+	}
+
+	// tool use: lines starting with ● — exit response mode
 	if strings.HasPrefix(line, "●") {
+		p.inResponse = false
 		return p.emitWithTaskStart(ev(EventToolUse, line, PriorityHigh))
 	}
 
-	// tool result indent lines: ⎿ (U+2B3F) or "  ⎿"
+	// tool result indent lines: ⎿
 	if strings.Contains(line, "⎿") {
+		p.inResponse = false
 		kind := EventToolResult
-		// result lines containing "Error:" are errors
 		if strings.Contains(line, "Error:") || strings.Contains(line, "error:") {
 			kind = EventError
 			return p.emitWithTaskStart(ev(kind, line, PriorityHigh))
@@ -139,12 +153,23 @@ func (p *Processor) classifyLine(line string) []Event {
 		return p.emitWithTaskStart(ev(EventError, line, PriorityHigh))
 	}
 
-	// empty lines — no event
+	// empty lines
 	if strings.TrimSpace(line) == "" {
 		return nil
 	}
 
-	// regular conversational text
+	// Only emit text events while inside a Claude response.
+	if !p.inResponse {
+		return nil
+	}
+
+	// opening code fence inside a response
+	if isCodeFence(line) {
+		p.inCodeBlock = true
+		p.codeLang = codeFenceLang(line)
+		return []Event{ev(EventCode, line, PriorityLow)}
+	}
+
 	return p.emitWithTaskStart(ev(EventText, line, PriorityMedium))
 }
 
@@ -163,6 +188,7 @@ func (p *Processor) Reset() {
 	p.inCodeBlock = false
 	p.codeLang = ""
 	p.taskStarted = false
+	p.inResponse = false
 	p.lineBuf = nil
 }
 
@@ -172,14 +198,19 @@ func ev(kind EventKind, text string, priority Priority) Event {
 	return Event{Kind: kind, Text: text, Priority: priority, Timestamp: time.Now()}
 }
 
-// spinnerRunes are the Braille spinner characters used by Claude Code.
-var spinnerRunes = []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
+// spinnerRunes includes Braille spinners and Claude Code's star/dot spinners.
+// ⏺ (U+23FA) is NOT included — it is Claude's response bullet, not a spinner.
+var spinnerRunes = []rune{
+	'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏', // Braille
+	'✳', '✶', '✻', '✢', '·', '⠂', '⠐',                  // Claude Code UI spinners
+}
 
 func isSpinnerLine(line string) bool {
-	if len(line) == 0 {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) == 0 {
 		return false
 	}
-	r, _ := utf8.DecodeRuneInString(line)
+	r, _ := utf8.DecodeRuneInString(trimmed)
 	for _, s := range spinnerRunes {
 		if r == s {
 			return true
@@ -213,6 +244,53 @@ func isErrorLine(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	for _, prefix := range errorPrefixes {
 		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// uiChromeRunes are box-drawing and decoration characters used exclusively
+// in the Claude Code UI shell — never in actual agent responses.
+var uiChromeRunes = []rune{'─', '╭', '╰', '│', '╮', '╯', '├', '┤', '┬', '┴', '┼'}
+
+// isUIChrome returns true for lines that are part of the Claude Code shell UI
+// rather than agent response content: box borders, the input prompt, status bar.
+func isUIChrome(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) == 0 {
+		return false
+	}
+	// Prompt line: ❯ (input prompt)
+	if strings.HasPrefix(trimmed, "❯") {
+		return true
+	}
+	// Shortcut hint line
+	if strings.HasPrefix(trimmed, "?") && strings.Contains(trimmed, "shortcuts") {
+		return true
+	}
+	// Lines composed entirely of box-drawing characters and spaces
+	allChrome := true
+	for _, r := range trimmed {
+		isChrome := false
+		for _, cr := range uiChromeRunes {
+			if r == cr {
+				isChrome = true
+				break
+			}
+		}
+		if !isChrome && r != ' ' {
+			allChrome = false
+			break
+		}
+	}
+	if allChrome {
+		return true
+	}
+	// Lines starting with box-drawing (borders of the welcome panel)
+	r, _ := utf8.DecodeRuneInString(trimmed)
+	for _, cr := range uiChromeRunes {
+		if r == cr {
 			return true
 		}
 	}

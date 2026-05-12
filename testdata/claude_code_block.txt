@@ -1,4 +1,4 @@
-Here is the implementation:
+⏺ Here is the implementation:
 
 ```go
 package main

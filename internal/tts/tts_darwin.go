@@ -85,7 +85,7 @@ func (s *DarwinSpeaker) Wait() error {
 func (s *DarwinSpeaker) Close() error { return s.Stop() }
 
 // rateToWPM converts 0-100 scale to words-per-minute for `say -r`.
+// 0=120 wpm (slow), 25=160 wpm (default, natural), 50=200 wpm, 100=300 wpm.
 func (s *DarwinSpeaker) rateToWPM() int {
-	// say default ~200 wpm; range ~80-400
-	return 80 + (s.rate * 320 / 100)
+	return 120 + (s.rate * 180 / 100)
 }
