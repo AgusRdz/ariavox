@@ -1,0 +1,9 @@
+I'll read the file to understand the current implementation.
+
+● Read(internal/processor/processor.go)
+  ⎿  Read 59 lines from internal/processor/processor.go
+
+Now I'll write the updated implementation.
+
+● Write(internal/processor/processor.go)
+  ⎿  Wrote 120 lines to internal/processor/processor.go

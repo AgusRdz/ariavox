@@ -1,0 +1,5 @@
+● Bash(go build ./...)
+  ⎿  Error: # github.com/AgusRdz/ariavox/cmd/ariavox
+     cmd/ariavox/run.go:10:2: "syscall" imported and not used
+
+I'll fix that import error.

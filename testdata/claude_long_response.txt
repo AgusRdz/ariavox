@@ -1,0 +1,26 @@
+I'll implement the phase 2 processor with full heuristic detection.
+
+The processor needs to handle these event types:
+- Spinner lines (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ characters)
+- Tool use lines starting with ●
+- Code blocks delimited by ```
+- Error output from tool results
+- Regular conversational text
+- Task start/end boundaries
+
+Here's my plan:
+
+1. Detect spinner characters at the start of a line
+2. Detect tool invocations by the ● bullet prefix
+3. Track code block state with a fence counter
+4. Classify error output by "Error:" prefix in tool results
+5. Emit TaskStart on the first non-spinner content
+6. Emit TaskEnd when output goes quiet (handled upstream)
+
+```go
+func (p *Processor) Process(b []byte) []Event {
+    // implementation here
+}
+```
+
+This gives us clean semantic events for TTS and screen readers.

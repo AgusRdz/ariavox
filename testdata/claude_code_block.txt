@@ -1,0 +1,13 @@
+Here is the implementation:
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("hello")
+}
+```
+
+You can run it with `go run main.go`.
