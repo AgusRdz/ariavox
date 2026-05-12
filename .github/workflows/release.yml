@@ -86,7 +86,9 @@ jobs:
         uses: sigstore/cosign-installer@v3
 
       - name: Install syft (SBOM)
-        uses: anchore/sbom-action/download-syft@v0
+        uses: taiki-e/install-action@v2
+        with:
+          tool: syft
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
