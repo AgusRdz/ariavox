@@ -56,7 +56,7 @@ func Default() Config {
 			Enabled: false,
 			Rate:    50,
 			Volume:  80,
-			PriorityFilter: []string{"task_end", "error", "tool_use"},
+			PriorityFilter: []string{"text", "tool_use", "error", "task_end"},
 		},
 		ScreenReader: ScreenReaderConfig{
 			StripANSI:        true,

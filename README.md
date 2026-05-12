@@ -155,9 +155,10 @@ tts:
   volume: 80        # 0-100
   voice: ""         # empty = system default
   priority_filter:  # which event kinds are spoken
-    - task_end
-    - error
+    - text
     - tool_use
+    - error
+    - task_end
 
 screen_reader:
   enabled: false
