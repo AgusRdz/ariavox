@@ -195,6 +195,26 @@ func TestEmptyInput(t *testing.T) {
 	}
 }
 
+func TestCalloutLinesSpoken(t *testing.T) {
+	p := processor.New()
+	// ▎ (U+258E) is used by Claude for callout/blockquote lines with real content
+	input := "⏺ Explicación:\n▎ (término medio)² = 4 · a · b\n"
+	events := p.Process([]byte(input))
+
+	var textEvents []processor.Event
+	for _, e := range events {
+		if e.Kind == processor.EventText {
+			textEvents = append(textEvents, e)
+		}
+	}
+	if len(textEvents) != 2 {
+		t.Fatalf("expected 2 EventText (intro + callout line), got %d: %+v", len(textEvents), textEvents)
+	}
+	if textEvents[1].Text != "▎ (término medio)² = 4 · a · b" {
+		t.Errorf("callout line should be spoken as-is, got %q", textEvents[1].Text)
+	}
+}
+
 func TestReset(t *testing.T) {
 	p := processor.New()
 	p.Process([]byte("⏺ some text\n"))

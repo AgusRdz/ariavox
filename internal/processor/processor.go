@@ -252,7 +252,7 @@ func isErrorLine(line string) bool {
 
 // uiChromeRunes are box-drawing and decoration characters used exclusively
 // in the Claude Code UI shell — never in actual agent responses.
-var uiChromeRunes = []rune{'─', '╭', '╰', '│', '╮', '╯', '├', '┤', '┬', '┴', '┼'}
+var uiChromeRunes = []rune{'─', '╭', '╰', '│', '╮', '╯', '├', '┤', '┬', '┴', '┼', '▎'}
 
 // isUIChrome returns true for lines that are part of the Claude Code shell UI
 // rather than agent response content: box borders, the input prompt, status bar.
@@ -284,15 +284,5 @@ func isUIChrome(line string) bool {
 			break
 		}
 	}
-	if allChrome {
-		return true
-	}
-	// Lines starting with box-drawing (borders of the welcome panel)
-	r, _ := utf8.DecodeRuneInString(trimmed)
-	for _, cr := range uiChromeRunes {
-		if r == cr {
-			return true
-		}
-	}
-	return false
+	return allChrome
 }

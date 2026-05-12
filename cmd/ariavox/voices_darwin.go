@@ -28,7 +28,7 @@ func printVoices() {
 	fmt.Println("    ariavox config set tts.voice \"<name>\"")
 	fmt.Println()
 	fmt.Println("  tip: download Enhanced/Premium voices in")
-	fmt.Println("  System Settings → Accessibility → Spoken Content → System Voice → Manage Voices")
+	fmt.Println("  System Settings → Accessibility → Vision → Read & Speak → System Voice → (i)")
 	fmt.Println()
 
 	// Show voices grouped: first non-English, then English
