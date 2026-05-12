@@ -80,6 +80,10 @@ func newDoctorCmd() *cobra.Command {
 				}
 			}
 
+			// TTS voices
+			fmt.Println("\nTTS voices:")
+			printVoices()
+
 			// environment
 			fmt.Println("\nenvironment:")
 			if v := os.Getenv("ARIAVOX_SR"); v != "" {
