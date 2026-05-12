@@ -72,6 +72,16 @@ func (s *DarwinSpeaker) SetVolume(vol int) error {
 	return nil
 }
 
+func (s *DarwinSpeaker) Wait() error {
+	s.mu.Lock()
+	cmd := s.current
+	s.mu.Unlock()
+	if cmd != nil {
+		return cmd.Wait()
+	}
+	return nil
+}
+
 func (s *DarwinSpeaker) Close() error { return s.Stop() }
 
 // rateToWPM converts 0-100 scale to words-per-minute for `say -r`.

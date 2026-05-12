@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AgusRdz/ariavox/internal/processor"
 	"github.com/AgusRdz/ariavox/internal/pty"
+	"github.com/AgusRdz/ariavox/internal/processor"
 	"github.com/AgusRdz/ariavox/internal/renderer"
 	"github.com/AgusRdz/ariavox/internal/tts"
 	"github.com/AgusRdz/ariavox/pkg/ansi"
@@ -61,10 +61,10 @@ func runAgent(args []string, srMode, ttsMode, verbose bool) error {
 	rCfg.SRMode = srMode
 	rend := renderer.New(rCfg, os.Stdout)
 
-	var speaker tts.Speaker
+	var bridge *tts.Bridge
 	if ttsMode {
-		speaker = tts.New()
-		defer speaker.Close()
+		bridge = tts.NewBridge(tts.New(), nil)
+		defer bridge.Close()
 	}
 
 	parser := &ansi.Parser{}
@@ -92,10 +92,14 @@ func runAgent(args []string, srMode, ttsMode, verbose bool) error {
 					if srMode {
 						rend.Render(ev)
 					}
-					if ttsMode && speaker != nil && ev.Text != "" {
-						if speakErr := speaker.Speak(ev.Text, ev.Priority); speakErr != nil && verbose {
-							fmt.Fprintf(os.Stderr, "ariavox: tts: %v\n", speakErr)
+					if ttsMode && bridge != nil {
+						var logf func(string, ...any)
+						if verbose {
+							logf = func(f string, a ...any) {
+								fmt.Fprintf(os.Stderr, "ariavox: "+f+"\n", a...)
+							}
 						}
+						bridge.Send(ev, logf)
 					}
 				}
 			}

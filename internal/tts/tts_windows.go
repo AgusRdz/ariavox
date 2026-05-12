@@ -75,6 +75,16 @@ func (s *WindowsSpeaker) SetVolume(vol int) error {
 	return nil
 }
 
+func (s *WindowsSpeaker) Wait() error {
+	s.mu.Lock()
+	cmd := s.current
+	s.mu.Unlock()
+	if cmd != nil {
+		return cmd.Wait()
+	}
+	return nil
+}
+
 func (s *WindowsSpeaker) Close() error { return s.Stop() }
 
 // sapiRate converts 0-100 to SAPI5 rate (-10 to +10).

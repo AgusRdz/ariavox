@@ -81,6 +81,16 @@ func (s *LinuxSpeaker) SetVolume(vol int) error {
 	return nil
 }
 
+func (s *LinuxSpeaker) Wait() error {
+	s.mu.Lock()
+	cmd := s.current
+	s.mu.Unlock()
+	if cmd != nil {
+		return cmd.Wait()
+	}
+	return nil
+}
+
 func (s *LinuxSpeaker) Close() error { return s.Stop() }
 
 func (s *LinuxSpeaker) espeakRate() int {
