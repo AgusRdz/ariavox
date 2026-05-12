@@ -1,0 +1,140 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+
+      - name: Run tests
+        run: go test ./... -count=1
+
+      - name: Validate semver tag
+        run: |
+          if ! echo "${{ github.ref_name }}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: tag '${{ github.ref_name }}' is not valid semver"
+            exit 1
+          fi
+
+      - name: Update CHANGELOG.md
+        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72  # v4
+        with:
+          config: cliff.toml
+          args: --output CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72  # v4
+        id: changelog
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build binaries
+        run: |
+          VERSION=${{ github.ref_name }}
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o bin/ariavox-linux-amd64   ./cmd/ariavox
+          CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o bin/ariavox-linux-arm64   ./cmd/ariavox
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o bin/ariavox-darwin-amd64  ./cmd/ariavox
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o bin/ariavox-darwin-arm64  ./cmd/ariavox
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o bin/ariavox-windows-amd64.exe ./cmd/ariavox
+
+      - name: Generate checksums
+        run: cd bin && sha256sum ariavox-* > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.content }}
+          files: |
+            bin/ariavox-linux-amd64
+            bin/ariavox-linux-arm64
+            bin/ariavox-darwin-amd64
+            bin/ariavox-darwin-arm64
+            bin/ariavox-windows-amd64.exe
+            bin/checksums.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: bin/ariavox-*
+
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          [ -z "${HOMEBREW_TAP_TOKEN}" ] && echo "HOMEBREW_TAP_TOKEN not set, skipping" && exit 0
+          VERSION=${{ github.ref_name }}
+          VER=${VERSION#v}
+          SHA_DARWIN_ARM64=$(sha256sum bin/ariavox-darwin-arm64 | awk '{print $1}')
+          SHA_DARWIN_AMD64=$(sha256sum bin/ariavox-darwin-amd64 | awk '{print $1}')
+          SHA_LINUX_AMD64=$(sha256sum bin/ariavox-linux-amd64 | awk '{print $1}')
+          SHA_LINUX_ARM64=$(sha256sum bin/ariavox-linux-arm64 | awk '{print $1}')
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/AgusRdz/homebrew-tap.git tap
+          cat > tap/Formula/ariavox.rb << FORMULA
+          class Ariavox < Formula
+            desc "Accessible PTY wrapper for AI coding agents"
+            homepage "https://github.com/AgusRdz/ariavox"
+            version "${VER}"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/AgusRdz/ariavox/releases/download/${VERSION}/ariavox-darwin-arm64"
+                sha256 "${SHA_DARWIN_ARM64}"
+              else
+                url "https://github.com/AgusRdz/ariavox/releases/download/${VERSION}/ariavox-darwin-amd64"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/AgusRdz/ariavox/releases/download/${VERSION}/ariavox-linux-arm64"
+                sha256 "${SHA_LINUX_ARM64}"
+              else
+                url "https://github.com/AgusRdz/ariavox/releases/download/${VERSION}/ariavox-linux-amd64"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              binary = Dir["ariavox-*"].first
+              chmod 0755, binary
+              bin.install binary => "ariavox"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/ariavox version")
+            end
+          end
+          FORMULA
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/ariavox.rb
+          git commit -m "ariavox ${VERSION}"
+          git push

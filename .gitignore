@@ -1,0 +1,8 @@
+bin/
+ariavox
+ariavox.exe
+coverage.out
+*.test
+dist/
+CLAUDE.md
+ariavox-brief.md
