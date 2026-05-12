@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/spf13/cobra"
+
+	"github.com/AgusRdz/ariavox/internal/config"
 )
 
 func newConfigCmd() *cobra.Command {
@@ -29,8 +34,20 @@ func newConfigShowCmd() *cobra.Command {
 		Use:   "show",
 		Short: "Print current configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Phase 5 stub: will be wired to internal/config
-			fmt.Println("ariavox config show: not yet implemented (phase 5)")
+			cfgPath, err := configFilePath()
+			if err != nil {
+				return err
+			}
+			cfg, err := config.Load(cfgPath)
+			if err != nil {
+				return err
+			}
+			out, err := yaml.Marshal(cfg)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("# config file: %s\n", cfgPath)
+			fmt.Print(string(out))
 			return nil
 		},
 	}
@@ -40,10 +57,20 @@ func newConfigSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "set <key> <value>",
 		Short:   "Set a configuration value",
-		Example: "  ariavox config set tts.rate 60",
+		Example: "  ariavox config set tts.rate 60\n  ariavox config set screen_reader.enabled true",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("ariavox config set: not yet implemented (phase 5)\nkey=%s value=%s\n", args[0], args[1])
+			cfgPath, err := configFilePath()
+			if err != nil {
+				return err
+			}
+			if err := ensureDefaultConfig(cfgPath); err != nil {
+				return err
+			}
+			if err := config.Set(cfgPath, args[0], args[1]); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "set %s = %s\n", args[0], args[1])
 			return nil
 		},
 	}
@@ -60,14 +87,9 @@ Falls back to vim, nano, or notepad in that order.`,
 			if err != nil {
 				return err
 			}
-
-			// Ensure config file exists
-			if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-				if err := ensureDefaultConfig(cfgPath); err != nil {
-					return fmt.Errorf("could not create config file: %w", err)
-				}
+			if err := ensureDefaultConfig(cfgPath); err != nil {
+				return fmt.Errorf("could not create config file: %w", err)
 			}
-
 			editor := resolveEditor()
 			editorCmd := exec.Command(editor, cfgPath)
 			editorCmd.Stdin = os.Stdin
@@ -106,4 +128,50 @@ func resolveEditor() string {
 		}
 	}
 	return "vi"
+}
+
+const defaultConfigYAML = `# ariavox configuration
+# Edit with: ariavox config edit
+# Full reference: https://github.com/AgusRdz/ariavox
+
+tts:
+  enabled: false
+  rate: 50        # 0-100
+  volume: 80      # 0-100
+  voice: ""       # empty = system default
+  priority_filter:
+    - task_end
+    - error
+    - tool_use
+
+screen_reader:
+  enabled: false        # set true or use --sr flag / ARIAVOX_SR=1
+  strip_ansi: true
+  suppress_spinners: true
+
+renderer:
+  separators: true
+  semantic_prefixes: true
+  high_contrast: false
+  respect_no_color: true
+
+agent:
+  command: ["claude"]
+  args: []
+`
+
+func ensureDefaultConfig(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil // already exists
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(defaultConfigYAML)
+	return err
 }
