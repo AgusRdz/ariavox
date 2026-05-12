@@ -1,0 +1,104 @@
+version: 2
+
+project_name: ariavox
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: linux-windows
+    main: ./cmd/ariavox
+    binary: ariavox
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "ariavox_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+signs:
+  - cmd: cosign
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
+    artifacts: checksum
+    output: true
+
+sboms:
+  - artifacts: binary
+    args:
+      - "$artifact"
+      - --file
+      - "$sbom"
+      - --output
+      - spdx-json
+
+snapshot:
+  version_template: "{{ .Tag }}-dev"
+
+changelog:
+  use: git-cliff
+  abbrev: 7
+  sort: asc
+  filters:
+    exclude:
+      - "^chore: update changelog"
+      - "^fix: address PR"
+      - "^fix: resolve merge conflict"
+
+release:
+  github:
+    owner: AgusRdz
+    name: ariavox
+  draft: false
+  prerelease: auto
+  name_template: "ariavox {{.Tag}}"
+  # macOS binaries are uploaded by the release job after goreleaser runs,
+  # using softprops/action-gh-release (see release.yml).
+
+brews:
+  - name: ariavox
+    repository:
+      owner: AgusRdz
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: github-actions[bot]
+      email: github-actions[bot]@users.noreply.github.com
+    homepage: https://github.com/AgusRdz/ariavox
+    description: Accessible PTY wrapper for AI coding agents
+    # skip_upload: auto skips when HOMEBREW_TAP_TOKEN is not set
+    skip_upload: auto
+    test: |
+      system "#{bin}/ariavox", "version"
+    install: |
+      bin.install "ariavox"
+    caveats: |
+      For screen reader / VoiceOver support, use the pre-built binary:
+        https://github.com/AgusRdz/ariavox/releases/latest
