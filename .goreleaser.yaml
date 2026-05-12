@@ -87,22 +87,3 @@ release:
   # macOS binaries are uploaded by the release job after goreleaser runs,
   # using softprops/action-gh-release (see release.yml).
 
-brews:
-  - name: ariavox
-    repository:
-      owner: AgusRdz
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    commit_author:
-      name: github-actions[bot]
-      email: github-actions[bot]@users.noreply.github.com
-    homepage: https://github.com/AgusRdz/ariavox
-    description: Accessible PTY wrapper for AI coding agents
-    skip_upload: auto
-    test: |
-      system "#{bin}/ariavox", "version"
-    install: |
-      bin.install "ariavox"
-    caveats: |
-      For screen reader / VoiceOver support, use the pre-built binary:
-        https://github.com/AgusRdz/ariavox/releases/latest
