@@ -19,10 +19,12 @@ type item struct {
 //   - PriorityMedium — enqueues; spoken after the current item finishes
 //   - PriorityLow   — enqueues only when queue is empty (dropped otherwise)
 //
-// Bridge also applies an event-kind filter so only relevant kinds reach TTS.
+// Bridge also applies an event-kind filter so only relevant kinds reach TTS,
+// and only speaks while a task is active (between TaskStart and TaskEnd).
 type Bridge struct {
-	speaker Speaker
-	filter  map[processor.EventKind]bool
+	speaker     Speaker
+	filter      map[processor.EventKind]bool
+	taskActive  bool // true between EventTaskStart and EventTaskEnd
 
 	mu      sync.Mutex
 	queue   []item
@@ -54,6 +56,21 @@ func NewBridge(speaker Speaker, filter []processor.EventKind) *Bridge {
 // Send queues or immediately handles an event according to its priority.
 // Errors from the Speaker are logged to the provided logf function (may be nil).
 func (b *Bridge) Send(e processor.Event, logf func(string, ...any)) {
+	b.mu.Lock()
+	// Track task boundaries regardless of filter.
+	if e.Kind == processor.EventTaskStart {
+		b.taskActive = true
+	} else if e.Kind == processor.EventTaskEnd {
+		b.taskActive = false
+	}
+	active := b.taskActive
+	b.mu.Unlock()
+
+	// Only speak during an active task response.
+	if !active {
+		return
+	}
+
 	if b.filter != nil && !b.filter[e.Kind] {
 		return
 	}

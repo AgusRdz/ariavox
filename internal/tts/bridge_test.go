@@ -47,6 +47,10 @@ func textEv(text string, priority processor.Priority) processor.Event {
 	return processor.Event{Kind: processor.EventText, Text: text, Priority: priority}
 }
 
+func taskStart() processor.Event {
+	return processor.Event{Kind: processor.EventTaskStart, Priority: processor.PriorityHigh}
+}
+
 func waitSpoken(t *testing.T, mock *mockSpeaker, want int) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -66,6 +70,7 @@ func TestBridge_MediumPriorityEnqueues(t *testing.T) {
 	b := tts.NewBridge(mock, nil)
 	defer b.Close()
 
+	b.Send(taskStart(), nil)
 	b.Send(textEv("one", processor.PriorityMedium), nil)
 	b.Send(textEv("two", processor.PriorityMedium), nil)
 	b.Send(textEv("three", processor.PriorityMedium), nil)
@@ -88,6 +93,7 @@ func TestBridge_HighPriorityClearsQueue(t *testing.T) {
 	defer b.Close()
 
 	// send first item — consumer will block on Wait
+	b.Send(taskStart(), nil)
 	b.Send(textEv("queued-1", processor.PriorityMedium), nil)
 	b.Send(textEv("queued-2", processor.PriorityMedium), nil)
 
@@ -123,6 +129,7 @@ func TestBridge_LowPriorityDroppedWhenQueueNotEmpty(t *testing.T) {
 	b := tts.NewBridge(blocking, nil)
 	defer b.Close()
 
+	b.Send(taskStart(), nil)
 	b.Send(textEv("first", processor.PriorityMedium), nil)
 	// queue is now non-empty (consumer is blocked) — low priority should be dropped
 	b.Send(textEv("low", processor.PriorityLow), nil)
@@ -144,6 +151,7 @@ func TestBridge_LowPrioritySpokenWhenQueueEmpty(t *testing.T) {
 	b := tts.NewBridge(mock, nil)
 	defer b.Close()
 
+	b.Send(taskStart(), nil)
 	b.Send(textEv("low", processor.PriorityLow), nil)
 	waitSpoken(t, mock, 1)
 
@@ -172,6 +180,7 @@ func TestBridge_KindFilter(t *testing.T) {
 	b := tts.NewBridge(mock, []processor.EventKind{processor.EventError, processor.EventToolUse})
 	defer b.Close()
 
+	b.Send(taskStart(), nil)
 	b.Send(processor.Event{Kind: processor.EventText, Text: "ignored", Priority: processor.PriorityMedium}, nil)
 	b.Send(processor.Event{Kind: processor.EventError, Text: "error!", Priority: processor.PriorityHigh}, nil)
 	b.Send(processor.Event{Kind: processor.EventSpinner, Text: "spinning", Priority: processor.PriorityMedium}, nil)
