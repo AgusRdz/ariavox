@@ -36,7 +36,12 @@ if [ "$OS" = "windows" ]; then
   EXT=".exe"
 fi
 
-BINARY="ariavox-${OS}-${ARCH}${EXT}"
+# macOS: prefer universal binary
+if [ "$OS" = "darwin" ]; then
+  BINARY="ariavox-darwin-universal"
+else
+  BINARY="ariavox-${OS}-${ARCH}${EXT}"
+fi
 
 # --- Version ---
 if [ -z "$ARIAVOX_VERSION" ]; then
@@ -53,9 +58,44 @@ URL="https://github.com/${REPO}/releases/download/${ARIAVOX_VERSION}/${BINARY}"
 
 echo "installing ariavox ${ARIAVOX_VERSION} (${OS}/${ARCH})..."
 
+CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${ARIAVOX_VERSION}/checksums.txt"
+BUNDLE_URL="https://github.com/${REPO}/releases/download/${ARIAVOX_VERSION}/checksums.txt.bundle"
+
 mkdir -p "$INSTALL_DIR"
+
+# Download binary
 curl -fsSL "$URL" -o "${INSTALL_DIR}/ariavox${EXT}"
 chmod +x "${INSTALL_DIR}/ariavox${EXT}"
+
+# Verify checksum
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+curl -fsSL "$CHECKSUMS_URL" -o "${TMP_DIR}/checksums.txt"
+
+# sha256sum / shasum
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$INSTALL_DIR" && grep "${BINARY}" "${TMP_DIR}/checksums.txt" | sha256sum --check --status) \
+    && echo "checksum verified" \
+    || { echo "checksum mismatch — aborting" >&2; rm -f "${INSTALL_DIR}/ariavox${EXT}"; exit 1; }
+elif command -v shasum >/dev/null 2>&1; then
+  (cd "$INSTALL_DIR" && grep "${BINARY}" "${TMP_DIR}/checksums.txt" | sed 's/ \*/ /' | shasum -a 256 --check --status) \
+    && echo "checksum verified" \
+    || { echo "checksum mismatch — aborting" >&2; rm -f "${INSTALL_DIR}/ariavox${EXT}"; exit 1; }
+fi
+
+# Optional: verify cosign signature (skipped if cosign not installed)
+if command -v cosign >/dev/null 2>&1; then
+  curl -fsSL "$BUNDLE_URL" -o "${TMP_DIR}/checksums.txt.bundle"
+  if cosign verify-blob \
+      --bundle "${TMP_DIR}/checksums.txt.bundle" \
+      --certificate-identity-regexp "https://github.com/${REPO}/" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      "${TMP_DIR}/checksums.txt" 2>/dev/null; then
+    echo "cosign signature verified"
+  else
+    echo "WARNING: cosign verification failed — the release may not have been signed yet" >&2
+  fi
+fi
 
 echo "installed ariavox to ${INSTALL_DIR}/ariavox${EXT}"
 echo ""
