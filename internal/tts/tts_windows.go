@@ -36,13 +36,20 @@ func (s *WindowsSpeaker) Speak(text string, priority processor.Priority) error {
 
 	// Escape single quotes to avoid PowerShell injection
 	safe := strings.ReplaceAll(text, "'", "''")
+
+	voiceLine := ""
+	if s.voice != "" {
+		safeVoice := strings.ReplaceAll(s.voice, "'", "''")
+		voiceLine = fmt.Sprintf("$s.SelectVoice('%s')\n", safeVoice)
+	}
+
 	script := fmt.Sprintf(`
 Add-Type -AssemblyName System.Speech
 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
 $s.Rate = %d
 $s.Volume = %d
-$s.Speak('%s')
-`, s.sapiRate(), s.volume, safe)
+%s$s.Speak('%s')
+`, s.sapiRate(), s.volume, voiceLine, safe)
 
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
 	s.current = cmd

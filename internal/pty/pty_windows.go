@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/UserExistsError/conpty"
 )
@@ -26,7 +27,11 @@ func (p *WindowsPTY) Start(cmd *exec.Cmd) error {
 		cmd.Env = os.Environ()
 	}
 
-	cpty, err := conpty.Start(cmd.Path, conpty.ConPtyDimensions(80, 24))
+	// ConPTY takes a single command-line string, not separate args.
+	// cmd.Args[0] is the program name (may differ from cmd.Path), remaining are args.
+	cmdLine := strings.Join(cmd.Args, " ")
+
+	cpty, err := conpty.Start(cmdLine, conpty.ConPtyDimensions(80, 24), conpty.ConPtyEnv(cmd.Env))
 	if err != nil {
 		return fmt.Errorf("pty: conpty start failed: %w", err)
 	}
