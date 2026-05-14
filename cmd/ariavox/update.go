@@ -188,7 +188,6 @@ func sha256File(path string) (string, error) {
 }
 
 func replaceExecutable(src, dst string) error {
-	// Write to a sibling temp file, then rename atomically
 	dir := filepath.Dir(dst)
 	tmp, err := os.CreateTemp(dir, ".ariavox-update-*")
 	if err != nil {
@@ -215,5 +214,16 @@ func replaceExecutable(src, dst string) error {
 		return err
 	}
 
-	return os.Rename(tmpPath, dst)
+	return replaceExe(tmpPath, dst)
+}
+
+// cleanOldExe removes any leftover .old backup from a previous update.
+// Called at startup so it runs after the old process has exited.
+func cleanOldExe() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	old := exe + ".old"
+	_ = os.Remove(old)
 }
